@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#313131">
+<title>kshanaClock</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Rozha+One&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Old+Mincho:wght@700&text=%E9%A0%88%E8%87%BE%E7%BE%85%E8%B1%AB%E5%BD%88%E6%8C%87%E7%9E%AC%E5%BF%B5%20%3A&display=swap">
+<style>
+  /* Figma: kshanaClock — body 388 × 743, #313131 */
+  :root {
+    --bg: #313131;
+    --ink: #ffffff;
+    --mute: #8e8e8e;
+    --s: 1;                  /* stage scale, set by script on small screens */
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    overflow: hidden;
+  }
+
+  body {
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: geometricPrecision;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  /* The artboard, kept at 1:1 with the Figma frame and centred in the window. */
+  .stage {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 388px;
+    height: 743px;
+    transform: translate(-50%, -50%) scale(var(--s));
+    opacity: 0;
+    transition: opacity 1.6s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .stage.is-ready { opacity: 1; }
+
+  .wheel {
+    position: absolute;
+    left: 122px;
+    top: 107px;
+    width: 145px;
+    height: 145px;
+    will-change: transform;
+  }
+
+  .line {
+    position: absolute;
+    left: 0;
+    right: 0;
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  /* Fraunces SemiBold 15 — line box 18 (auto line-height in Figma) */
+  .label {
+    font-family: "Fraunces", serif;
+    font-optical-sizing: auto;
+    font-weight: 600;
+    font-size: 15px;
+    line-height: 18px;
+  }
+
+  /* Fraunces Regular 52 — line box 64 */
+  .time {
+    display: flex;
+    justify-content: center;
+    font-family: "Fraunces", serif;
+    font-optical-sizing: auto;
+    font-weight: 400;
+    font-size: 52px;
+    line-height: 64px;
+  }
+
+  .units { color: var(--mute); font-size: 15px; }
+  .units--zh { font-family: "Zen Old Mincho", serif; font-weight: 700; line-height: 22px; }
+  .units--sa { font-family: "Rozha One", serif; font-weight: 400; line-height: 21px; }
+  .units--en { font-family: "Fraunces", serif; font-optical-sizing: auto; font-weight: 600; line-height: 18px; }
+
+  /* Fraunces has no tabular figures, so each digit sits in a fixed-width cell
+     (about the width of its "0") to keep the centred line from shifting. */
+  .cell {
+    position: relative;
+    display: inline-block;
+    width: 0.6em;
+    text-align: center;
+  }
+  .glyph {
+    display: block;
+  }
+  .glyph.is-leaving {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px; height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+  <main class="stage" id="stage">
+    <img class="wheel" id="wheel" src="dharmachakra.svg" width="145" height="145" alt="">
+
+    <p class="line label" style="top:307px">the Buddhist Time</p>
+    <div class="line time" id="buddhist" style="top:321px" aria-hidden="true"></div>
+    <p class="line units units--zh" lang="zh-Hant" style="top:383px">須臾 : 羅豫 : 彈指 : 瞬 : 念</p>
+    <p class="line units units--sa" lang="sa" style="top:408px">मुहूर्त : लय : अच्छटा : निमेष : क्षण</p>
+
+    <p class="line label" style="top:460px">the Conventional Time</p>
+    <div class="line time" id="conventional" style="top:474px" aria-hidden="true"></div>
+    <p class="line units units--en" style="top:538px">Hours : Minutes : Seconds : Milliseconds</p>
+
+    <p class="sr-only" id="readout" aria-live="off"></p>
+  </main>
+
+<script>
+(() => {
+  // ── Buddhist units, after the 摩訶僧祇律 (Mahāsāṃghika Vinaya) ──────────
+  //   20 念 = 1 瞬 · 20 瞬 = 1 彈指 · 20 彈指 = 1 羅豫 · 20 羅豫 = 1 須臾 · 30 須臾 = 1 晝夜
+  //   so one day-and-night (86 400 000 ms) gives 1 念 = 18 ms.
+  const MS = {
+    muhurta: 2_880_000,   // 須臾 मुहूर्त  48 min
+    laya:      144_000,   // 羅豫 लय       2 min 24 s
+    acchata:     7_200,   // 彈指 अच्छटा   7.2 s
+    nimesa:        360,   // 瞬  निमेष     0.36 s
+    ksana:          18,   // 念  क्षण      0.018 s
+  };
+
+  const stage = document.getElementById('stage');
+  const wheel = document.getElementById('wheel');
+  const readout = document.getElementById('readout');
+  const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
+
+  // Each group: how many digits, and how long its last digit lasts (ms).
+  const BUDDHIST = [
+    { digits: 2, unit: MS.muhurta },
+    { digits: 2, unit: MS.laya },
+    { digits: 2, unit: MS.acchata },
+    { digits: 2, unit: MS.nimesa },
+    { digits: 2, unit: MS.ksana },
+  ];
+  const CONVENTIONAL = [
+    { digits: 2, unit: 3_600_000 },
+    { digits: 2, unit: 60_000 },
+    { digits: 2, unit: 1_000 },
+    { digits: 3, unit: 1 },
+  ];
+
+  function build(el, groups) {
+    const cells = [];
+    groups.forEach((g, gi) => {
+      if (gi > 0) {
+        const colon = document.createElement('span');
+        colon.className = 'colon';
+        colon.textContent = ':';
+        el.appendChild(colon);
+      }
+      for (let i = 0; i < g.digits; i++) {
+        const cell = document.createElement('span');
+        cell.className = 'cell';
+        const glyph = document.createElement('span');
+        glyph.className = 'glyph';
+        cell.appendChild(glyph);
+        el.appendChild(cell);
+        // how long this particular digit stays put before it changes
+        const period = g.unit * 10 ** (g.digits - 1 - i);
+        cells.push({ cell, glyph, value: null, period });
+      }
+    });
+    return cells;
+  }
+
+  const bCells = build(document.getElementById('buddhist'), BUDDHIST);
+  const cCells = build(document.getElementById('conventional'), CONVENTIONAL);
+
+  // Slow digits glide; fast ones get a shorter, smaller move; the fastest just swap.
+  const EASE_LEAVE = 'cubic-bezier(0.25, 1, 0.5, 1)';   // easeOutQuart: the old figure lets go at once
+  const EASE_ENTER = 'cubic-bezier(0.16, 1, 0.3, 1)';   // easeOutExpo: the new one arrives, then settles
+  const MAX_DUR = 820;
+
+  function motionFor(period) {
+    if (reduceMotion.matches || period < 90) return null;
+    const dur = Math.min(MAX_DUR, period * 0.6);
+    const k = dur / MAX_DUR;                       // 0 … 1
+    return {
+      dur,
+      rise: (0.12 + 0.26 * k).toFixed(3) + 'em',
+      blur: k > 0.35 ? (3.5 * k).toFixed(2) + 'px' : '0px',
+    };
+  }
+
+  function swap(c, ch) {
+    c.value = ch;
+    const m = motionFor(c.period);
+
+    // clear anything still on its way out
+    c.cell.querySelectorAll('.is-leaving').forEach(n => n.remove());
+
+    if (!m) {
+      c.glyph.getAnimations().forEach(a => a.cancel());
+      c.glyph.textContent = ch;
+      return;
+    }
+
+    const old = c.glyph;
+    old.getAnimations().forEach(a => a.finish());
+    old.classList.add('is-leaving');
+
+    const next = document.createElement('span');
+    next.className = 'glyph';
+    next.textContent = ch;
+    c.cell.appendChild(next);
+    c.glyph = next;
+
+    old.animate(
+      [
+        { transform: 'translateY(0)', opacity: 1, filter: 'blur(0px)' },
+        { transform: `translateY(-${m.rise})`, opacity: 0, filter: `blur(${m.blur})` },
+      ],
+      { duration: m.dur * 0.5, easing: EASE_LEAVE, fill: 'forwards' }
+    ).onfinish = () => old.remove();
+
+    next.animate(
+      [
+        { transform: `translateY(${m.rise})`, opacity: 0, filter: `blur(${m.blur})` },
+        { transform: 'translateY(0)', opacity: 1, filter: 'blur(0px)' },
+      ],
+      { duration: m.dur, easing: EASE_ENTER }
+    );
+  }
+
+  function render(cells, str, animate) {
+    for (let i = 0; i < cells.length; i++) {
+      const c = cells[i];
+      const ch = str[i];
+      if (c.value === ch) continue;
+      if (!animate || c.value === null) {
+        c.value = ch;
+        c.glyph.textContent = ch;
+      } else {
+        swap(c, ch);
+      }
+    }
+  }
+
+  const pad = (n, w = 2) => String(n).padStart(w, '0');
+
+  let live = false;        // animate only once the page has faded in
+  let lastSecond = -1;
+
+  function tick() {
+    const now = new Date();
+    const h = now.getHours(), mi = now.getMinutes(), s = now.getSeconds(), ms = now.getMilliseconds();
+    const t = ((h * 60 + mi) * 60 + s) * 1000 + ms;   // ms since local midnight
+
+    const b = [
+      Math.floor(t / MS.muhurta),            // 0–29
+      Math.floor(t / MS.laya) % 20,          // 0–19
+      Math.floor(t / MS.acchata) % 20,
+      Math.floor(t / MS.nimesa) % 20,
+      Math.floor(t / MS.ksana) % 20,
+    ];
+
+    render(bCells, b.map(v => pad(v)).join(''), live);
+    render(cCells, pad(h) + pad(mi) + pad(s) + pad(ms, 3), live);
+
+    // 法輪: one clockwise turn every 10 seconds, upright at :00, :10, :20 …
+    wheel.style.transform = `rotate(${(((s % 10) * 1000 + ms) / 10000) * 360}deg)`;
+
+    if (s !== lastSecond) {
+      lastSecond = s;
+      readout.textContent =
+        `Buddhist time ${b.join(':')}, conventional time ${pad(h)}:${pad(mi)}:${pad(s)}`;
+    }
+
+    requestAnimationFrame(tick);
+  }
+
+  // Scale the artboard down only when the window is too small for it.
+  // Content spans y 107–556 of the 743px frame, i.e. 264.5px above its centre.
+  function fit() {
+    const sx = (innerWidth - 24) / 388;
+    const sy = (innerHeight / 2 - 20) / 264.5;
+    stage.style.setProperty('--s', Math.max(0.4, Math.min(1, sx, sy)).toFixed(4));
+  }
+  addEventListener('resize', fit);
+  fit();
+
+  tick();
+
+  const fontsReady = Promise.all([
+    document.fonts.load('400 52px "Fraunces"', '0123456789:'),
+    document.fonts.load('600 15px "Fraunces"', 'the Buddhist Time'),
+    document.fonts.load('700 15px "Zen Old Mincho"', '須臾羅豫彈指瞬念'),
+    document.fonts.load('400 15px "Rozha One"', 'मुहूर्त'),
+  ]).catch(() => {});
+  const timeout = new Promise(r => setTimeout(r, 3000));
+
+  Promise.race([fontsReady, timeout]).then(() => {
+    requestAnimationFrame(() => {
+      stage.classList.add('is-ready');
+      setTimeout(() => { live = true; }, 300);
+    });
+  });
+})();
+</script>
+</body>
+</html>
