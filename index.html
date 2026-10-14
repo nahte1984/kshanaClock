@@ -3,108 +3,79 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#313131">
 <title>kshanaClock</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Rozha+One&display=swap">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Old+Mincho:wght@700&text=%E9%A0%88%E8%87%BE%E7%BE%85%E8%B1%AB%E5%BD%88%E6%8C%87%E7%9E%AC%E5%BF%B5%20%3A&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&display=swap">
 <style>
-  /* Figma: kshanaClock — body 388 × 743, #313131 */
+  /* Figma: body 388 × 743 · Ellipse 360 · ticks 2 × 20 · Fraunces 28 */
   :root {
-    --bg: #313131;
+    --s: 1;                       /* clock scale, set by script on small screens */
     --ink: #ffffff;
-    --mute: #8e8e8e;
-    --s: 1;                  /* stage scale, set by script on small screens */
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
   html, body {
     height: 100%;
-    background: var(--bg);
     overflow: hidden;
+    background: #270e3c;
   }
 
   body {
-    color: var(--ink);
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-    text-rendering: geometricPrecision;
+    cursor: pointer;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
     user-select: none;
     -webkit-user-select: none;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
-  /* The artboard, kept at 1:1 with the Figma frame and centred in the window. */
-  .stage {
-    position: absolute;
+  /* ── five skies, cross-faded by time of day ─────────────────────────── */
+  .sky {
+    position: fixed;
+    inset: 0;
+    opacity: 0;
+    transition: opacity 6s ease-in-out;
+  }
+  .sky.is-on { opacity: 1; }
+  .sky--night     { background: linear-gradient(180deg, #286d8c 0%, #270e3c 100%); } /* 19:00–03:00 */
+  .sky--predawn   { background: linear-gradient(180deg, #270e3c 0%, #3d94b1 100%); } /* 03:00–05:00 */
+  .sky--morning   { background: linear-gradient(180deg, #88c0ff 0%, #fff3c4 100%); } /* 05:00–12:00 */
+  .sky--afternoon { background: linear-gradient(180deg, #fff3c4 0%, #fed7c3 100%); } /* 12:00–17:00 */
+  .sky--dusk      { background: linear-gradient(180deg, #fdd7ca 0%, #4089a9 100%); } /* 17:00–19:00 */
+
+  /* ── clock ─────────────────────────────────────────────────────────── */
+  .clock {
+    position: fixed;
     left: 50%;
     top: 50%;
-    width: 388px;
-    height: 743px;
-    transform: translate(-50%, -50%) scale(var(--s));
+    width: calc(440px * var(--s));
+    height: calc(440px * var(--s));
+    transform: translate(-50%, -50%);
+    overflow: visible;
+    z-index: 100;
     opacity: 0;
     transition: opacity 1.6s cubic-bezier(0.22, 1, 0.36, 1);
   }
-  .stage.is-ready { opacity: 1; }
+  .clock.is-ready { opacity: 1; }
+  .clock:focus { outline: none; }
 
-  .wheel {
-    position: absolute;
-    left: 122px;
-    top: 107px;
-    width: 145px;
-    height: 145px;
-    will-change: transform;
-  }
-
-  .line {
-    position: absolute;
-    left: 0;
-    right: 0;
-    text-align: center;
-    white-space: nowrap;
-  }
-
-  /* Fraunces SemiBold 15 — line box 18 (auto line-height in Figma) */
   .label {
     font-family: "Fraunces", serif;
     font-optical-sizing: auto;
-    font-weight: 600;
-    font-size: 15px;
-    line-height: 18px;
+    font-weight: 400;
+    font-size: 28px;
+    fill: var(--ink);
   }
-
-  /* Fraunces Regular 52 — line box 64 */
-  .time {
-    display: flex;
-    justify-content: center;
+  .readout {
     font-family: "Fraunces", serif;
     font-optical-sizing: auto;
-    font-weight: 400;
-    font-size: 52px;
-    line-height: 64px;
-  }
-
-  .units { color: var(--mute); font-size: 15px; }
-  .units--zh { font-family: "Zen Old Mincho", serif; font-weight: 700; line-height: 22px; }
-  .units--sa { font-family: "Rozha One", serif; font-weight: 400; line-height: 21px; }
-  .units--en { font-family: "Fraunces", serif; font-optical-sizing: auto; font-weight: 600; line-height: 18px; }
-
-  /* Fraunces has no tabular figures, so each digit sits in a fixed-width cell
-     (about the width of its "0") to keep the centred line from shifting. */
-  .cell {
-    position: relative;
-    display: inline-block;
-    width: 0.6em;
-    text-align: center;
-  }
-  .glyph {
-    display: block;
-  }
-  .glyph.is-leaving {
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
+    font-weight: 600;
+    font-size: 28px;
+    letter-spacing: 0.05em;
+    fill: var(--ink);
   }
 
   .sr-only {
@@ -117,210 +88,250 @@
 </style>
 </head>
 <body>
-  <main class="stage" id="stage">
-    <img class="wheel" id="wheel" src="dharmachakra.svg" width="145" height="145" alt="">
+  <div class="sky sky--night"     data-sky="night"></div>
+  <div class="sky sky--predawn"   data-sky="predawn"></div>
+  <div class="sky sky--morning"   data-sky="morning"></div>
+  <div class="sky sky--afternoon" data-sky="afternoon"></div>
+  <div class="sky sky--dusk"      data-sky="dusk"></div>
 
-    <p class="line label" style="top:307px">the Buddhist Time</p>
-    <div class="line time" id="buddhist" style="top:321px" aria-hidden="true"></div>
-    <p class="line units units--zh" lang="zh-Hant" style="top:383px">須臾 : 羅豫 : 彈指 : 瞬 : 念</p>
-    <p class="line units units--sa" lang="sa" style="top:408px">मुहूर्त : लय : अच्छटा : निमेष : क्षण</p>
+  <svg class="clock" id="clock" viewBox="-220 -220 440 440" role="button" tabindex="0"
+       aria-label="Clock. Press to switch between Buddhist time and conventional time.">
+    <defs>
+      <!-- r 191: label baseline, read clockwise over the top, glyphs facing out -->
+      <path id="arc-label" d="M 0 191 A 191 191 0 1 1 0 -191 A 191 191 0 1 1 0 191"/>
+      <!-- r 213: readout baseline, read left→right along the bottom, glyphs facing in -->
+      <path id="arc-readout" d="M 0 -213 A 213 213 0 1 0 0 213 A 213 213 0 1 0 0 -213"/>
 
-    <p class="line label" style="top:460px">the Conventional Time</p>
-    <div class="line time" id="conventional" style="top:474px" aria-hidden="true"></div>
-    <p class="line units units--en" style="top:538px">Hours : Minutes : Seconds : Milliseconds</p>
+      <filter id="shadow-10" x="-50%" y="-50%" width="200%" height="200%" color-interpolation-filters="sRGB">
+        <feDropShadow dx="0" dy="0" stdDeviation="3" flood-color="#000" flood-opacity="0.10"/>
+      </filter>
+      <filter id="shadow-15" x="-50%" y="-50%" width="200%" height="200%" color-interpolation-filters="sRGB">
+        <feDropShadow dx="0" dy="0" stdDeviation="3" flood-color="#000" flood-opacity="0.15"/>
+      </filter>
+    </defs>
 
-    <p class="sr-only" id="readout" aria-live="off"></p>
-  </main>
+    <!-- face: white 50% fill, 2px inside stroke -->
+    <circle r="180" fill="#fff" fill-opacity="0.5"/>
+    <circle r="179" fill="none" stroke="#fff" stroke-width="2"/>
+
+    <g id="ticks" fill="#fff"></g>
+
+    <text class="label" id="label-b" text-anchor="middle"><textPath href="#arc-label" startOffset="50%">the Buddhist Time</textPath></text>
+    <text class="label" id="label-c" text-anchor="middle" opacity="0"><textPath href="#arc-label" startOffset="50%">the Conventional Time</textPath></text>
+
+    <text class="readout" id="readout-b" text-anchor="middle"><textPath href="#arc-readout" startOffset="50%" id="readout-b-text">00:00:00</textPath></text>
+    <text class="readout" id="readout-c" text-anchor="middle" opacity="0"><textPath href="#arc-readout" startOffset="50%" id="readout-c-text">00:00:00</textPath></text>
+
+    <!-- hands, drawn pointing to 12 and rotated about the centre -->
+    <g id="hand-hour" fill="#fff" filter="url(#shadow-10)">
+      <rect x="-6" y="-86" width="12" height="114" rx="6"/>
+      <circle r="16"/>
+    </g>
+    <g id="hand-minute" fill="#fff" filter="url(#shadow-15)">
+      <rect x="-3" y="-131" width="6" height="161" rx="3"/>
+      <circle r="10"/>
+    </g>
+    <g id="hand-second" fill="#ff4e89">
+      <rect x="-1" y="-162" width="2" height="187" rx="1"/>
+      <circle r="6"/>
+    </g>
+  </svg>
+
+  <p class="sr-only" id="readout" aria-live="off"></p>
 
 <script>
 (() => {
-  // ── Buddhist units, after the 摩訶僧祇律 (Mahāsāṃghika Vinaya) ──────────
-  //   20 念 = 1 瞬 · 20 瞬 = 1 彈指 · 20 彈指 = 1 羅豫 · 20 羅豫 = 1 須臾 · 30 須臾 = 1 晝夜
-  //   so one day-and-night (86 400 000 ms) gives 1 念 = 18 ms.
-  const MS = {
-    muhurta: 2_880_000,   // 須臾 मुहूर्त  48 min
-    laya:      144_000,   // 羅豫 लय       2 min 24 s
-    acchata:     7_200,   // 彈指 अच्छटा   7.2 s
-    nimesa:        360,   // 瞬  निमेष     0.36 s
-    ksana:          18,   // 念  क्षण      0.018 s
-  };
+  const SVGNS = 'http://www.w3.org/2000/svg';
+  const DAY = 86_400_000;
 
-  const stage = document.getElementById('stage');
-  const wheel = document.getElementById('wheel');
-  const readout = document.getElementById('readout');
+  // ── Buddhist units (摩訶僧祇律): 30 須臾 a day, 20 羅豫 a 須臾, 20 彈指 a 羅豫 ──
+  const MUHURTA = DAY / 30;          // 須臾  2 880 000 ms (48 min)
+  const LAYA    = MUHURTA / 20;      // 羅豫    144 000 ms (2 min 24 s)
+  const ACCHATA = LAYA / 20;         // 彈指      7 200 ms
+
+  // Hand angles in degrees, not wrapped, so in-between angles stay continuous.
+  //   Buddhist:     hour 2 turns a day (15 須臾 per turn) · minute 1 turn per 須臾 · second 1 turn per 羅豫
+  //   Conventional: hour 2 turns a day · minute 1 turn an hour · second 1 turn a minute
+  const anglesB = t => ({ h: t / DAY * 720, m: t / MUHURTA * 360, s: t / LAYA * 360 });
+  const anglesC = t => ({ h: t / DAY * 720, m: t / 3_600_000 * 360, s: t / 60_000 * 360 });
+
+  // ── ticks: 15 for 須臾 (every 24°), 12 for hours (every 30°) ───────────
+  // Tick k sits at 24k° in Buddhist time and 30k° in conventional time,
+  // so it travels 6k° clockwise. Ticks 12–14 keep going the same way and fade out.
+  const N_B = 15, N_C = 12;
+  const R_OUT = 160, LEN = 20, W = 2;       // 20px in from the 180px rim
+  const tickGroup = document.getElementById('ticks');
+  const ticks = [];
+  for (let k = 0; k < N_B; k++) {
+    const r = document.createElementNS(SVGNS, 'rect');
+    r.setAttribute('x', -W / 2);
+    r.setAttribute('y', -R_OUT);
+    r.setAttribute('width', W);
+    r.setAttribute('height', LEN);
+    tickGroup.appendChild(r);
+    ticks.push(r);
+  }
+
+  const handH = document.getElementById('hand-hour');
+  const handM = document.getElementById('hand-minute');
+  const handS = document.getElementById('hand-second');
+  const labelB = document.getElementById('label-b');
+  const labelC = document.getElementById('label-c');
+  const readB = document.getElementById('readout-b');
+  const readC = document.getElementById('readout-c');
+  const readBText = document.getElementById('readout-b-text');
+  const readCText = document.getElementById('readout-c-text');
+  const srReadout = document.getElementById('readout');
+  const clock = document.getElementById('clock');
+  const skies = [...document.querySelectorAll('.sky')];
   const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
 
-  // Each group: how many digits, and how long its last digit lasts (ms).
-  const BUDDHIST = [
-    { digits: 2, unit: MS.muhurta },
-    { digits: 2, unit: MS.laya },
-    { digits: 2, unit: MS.acchata },
-    { digits: 2, unit: MS.nimesa },
-    { digits: 2, unit: MS.ksana },
-  ];
-  const CONVENTIONAL = [
-    { digits: 2, unit: 3_600_000 },
-    { digits: 2, unit: 60_000 },
-    { digits: 2, unit: 1_000 },
-    { digits: 3, unit: 1 },
-  ];
+  // ── switching state ─────────────────────────────────────────────────
+  // u runs 0 (Buddhist) ↔ 1 (conventional); e = eased u drives everything.
+  let u = 0, target = 0, lastTs = 0;
+  const turns = { h: 0, m: 0, s: 0 };   // whole turns added so each hand takes the short way round
+  const duration = () => (reduceMotion.matches ? 400 : 1800);
 
-  function build(el, groups) {
-    const cells = [];
-    groups.forEach((g, gi) => {
-      if (gi > 0) {
-        const colon = document.createElement('span');
-        colon.className = 'colon';
-        colon.textContent = ':';
-        el.appendChild(colon);
-      }
-      for (let i = 0; i < g.digits; i++) {
-        const cell = document.createElement('span');
-        cell.className = 'cell';
-        const glyph = document.createElement('span');
-        glyph.className = 'glyph';
-        cell.appendChild(glyph);
-        el.appendChild(cell);
-        // how long this particular digit stays put before it changes
-        const period = g.unit * 10 ** (g.digits - 1 - i);
-        cells.push({ cell, glyph, value: null, period });
-      }
-    });
-    return cells;
+  const easeInOut = x => x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+  const clamp01 = x => Math.min(1, Math.max(0, x));
+
+  const msOfDay = d =>
+    ((d.getHours() * 60 + d.getMinutes()) * 60 + d.getSeconds()) * 1000 + d.getMilliseconds();
+
+  function toggle() {
+    if (u === target) {
+      // starting from rest: pick the shortest way for each hand
+      const t = msOfDay(new Date());
+      const A = anglesB(t), C = anglesC(t);
+      for (const key of ['h', 'm', 's']) turns[key] = Math.round((A[key] - C[key]) / 360);
+    }
+    target = 1 - target;
   }
 
-  const bCells = build(document.getElementById('buddhist'), BUDDHIST);
-  const cCells = build(document.getElementById('conventional'), CONVENTIONAL);
+  addEventListener('click', toggle);
+  addEventListener('keydown', ev => {
+    if (ev.key === ' ' || ev.key === 'Enter') { ev.preventDefault(); toggle(); }
+  });
 
-  // Slow digits glide; fast ones get a shorter, smaller move; the fastest just swap.
-  const EASE_LEAVE = 'cubic-bezier(0.25, 1, 0.5, 1)';   // easeOutQuart: the old figure lets go at once
-  const EASE_ENTER = 'cubic-bezier(0.16, 1, 0.3, 1)';   // easeOutExpo: the new one arrives, then settles
-  const MAX_DUR = 820;
-
-  function motionFor(period) {
-    if (reduceMotion.matches || period < 90) return null;
-    const dur = Math.min(MAX_DUR, period * 0.6);
-    const k = dur / MAX_DUR;                       // 0 … 1
-    return {
-      dur,
-      rise: (0.12 + 0.26 * k).toFixed(3) + 'em',
-      blur: k > 0.35 ? (3.5 * k).toFixed(2) + 'px' : '0px',
-    };
+  // ── sky by time of day ──────────────────────────────────────────────
+  function skyFor(h) {
+    if (h >= 19 || h < 3) return 'night';
+    if (h < 5) return 'predawn';
+    if (h < 12) return 'morning';
+    if (h < 17) return 'afternoon';
+    return 'dusk';
   }
-
-  function swap(c, ch) {
-    c.value = ch;
-    const m = motionFor(c.period);
-
-    // clear anything still on its way out
-    c.cell.querySelectorAll('.is-leaving').forEach(n => n.remove());
-
-    if (!m) {
-      c.glyph.getAnimations().forEach(a => a.cancel());
-      c.glyph.textContent = ch;
+  // The incoming sky fades in on top of the outgoing one, which stays put until it is covered,
+  // so the page never dips toward the base colour mid-fade.
+  let currentSky = null, skyZ = 1, skyTimer = 0;
+  function setSky(name, instant) {
+    if (name === currentSky) return;
+    currentSky = name;
+    const next = skies.find(el => el.dataset.sky === name);
+    clearTimeout(skyTimer);
+    if (instant) {
+      for (const el of skies) {
+        el.style.transition = 'none';
+        el.classList.toggle('is-on', el === next);
+        void el.offsetWidth;
+        el.style.transition = '';
+      }
       return;
     }
-
-    const old = c.glyph;
-    old.getAnimations().forEach(a => a.finish());
-    old.classList.add('is-leaving');
-
-    const next = document.createElement('span');
-    next.className = 'glyph';
-    next.textContent = ch;
-    c.cell.appendChild(next);
-    c.glyph = next;
-
-    old.animate(
-      [
-        { transform: 'translateY(0)', opacity: 1, filter: 'blur(0px)' },
-        { transform: `translateY(-${m.rise})`, opacity: 0, filter: `blur(${m.blur})` },
-      ],
-      { duration: m.dur * 0.5, easing: EASE_LEAVE, fill: 'forwards' }
-    ).onfinish = () => old.remove();
-
-    next.animate(
-      [
-        { transform: `translateY(${m.rise})`, opacity: 0, filter: `blur(${m.blur})` },
-        { transform: 'translateY(0)', opacity: 1, filter: 'blur(0px)' },
-      ],
-      { duration: m.dur, easing: EASE_ENTER }
-    );
+    next.style.zIndex = ++skyZ;
+    next.classList.add('is-on');
+    const settle = () => {
+      clearTimeout(skyTimer);
+      next.removeEventListener('transitionend', settle);
+      if (currentSky !== name) return;
+      for (const el of skies) {
+        if (el === next) continue;
+        el.style.transition = 'none';
+        el.classList.remove('is-on');
+        void el.offsetWidth;
+        el.style.transition = '';
+      }
+    };
+    next.addEventListener('transitionend', settle);
+    skyTimer = setTimeout(settle, 9000);   // fallback if the transition never reports back
   }
 
-  function render(cells, str, animate) {
-    for (let i = 0; i < cells.length; i++) {
-      const c = cells[i];
-      const ch = str[i];
-      if (c.value === ch) continue;
-      if (!animate || c.value === null) {
-        c.value = ch;
-        c.glyph.textContent = ch;
+  const pad = n => String(n).padStart(2, '0');
+  const wrap = a => ((a % 360) + 360) % 360;
+  let lastB = '', lastC = '';
+
+  function frame(ts) {
+    const dt = lastTs ? Math.min(100, ts - lastTs) : 0;
+    lastTs = ts;
+    if (u !== target) {
+      const step = dt / duration();
+      u = target > u ? Math.min(target, u + step) : Math.max(target, u - step);
+    }
+    const e = easeInOut(u);
+
+    const now = new Date();
+    const t = msOfDay(now);
+    const A = anglesB(t), C = anglesC(t);
+
+    // hands: blend from the Buddhist angle toward the conventional one
+    const blend = key => A[key] + e * (C[key] + 360 * turns[key] - A[key]);
+    handH.setAttribute('transform', `rotate(${wrap(blend('h')).toFixed(3)})`);
+    handM.setAttribute('transform', `rotate(${wrap(blend('m')).toFixed(3)})`);
+    handS.setAttribute('transform', `rotate(${wrap(blend('s')).toFixed(3)})`);
+
+    // ticks: k moves from 24k° to 30k°; the three extra ticks shrink and fade as they go
+    const fade = 1 - clamp01(e / 0.75);
+    for (let k = 0; k < N_B; k++) {
+      const a = 24 * k + 6 * k * e;
+      if (k < N_C) {
+        ticks[k].setAttribute('transform', `rotate(${a.toFixed(3)})`);
       } else {
-        swap(c, ch);
+        const g = Math.max(0.0001, fade);
+        // scale the tick's length about its outer end
+        ticks[k].setAttribute('transform',
+          `rotate(${a.toFixed(3)}) translate(0 ${-R_OUT}) scale(1 ${g.toFixed(4)}) translate(0 ${R_OUT})`);
+        ticks[k].setAttribute('opacity', fade.toFixed(3));
       }
     }
-  }
 
-  const pad = (n, w = 2) => String(n).padStart(w, '0');
+    // words: the outgoing set leaves in the first half, the incoming one arrives in the second
+    const outOp = clamp01(1 - e * 2), inOp = clamp01(e * 2 - 1);
+    labelB.setAttribute('opacity', outOp.toFixed(3));
+    readB.setAttribute('opacity', outOp.toFixed(3));
+    labelC.setAttribute('opacity', inOp.toFixed(3));
+    readC.setAttribute('opacity', inOp.toFixed(3));
 
-  let live = false;        // animate only once the page has faded in
-  let lastSecond = -1;
-
-  function tick() {
-    const now = new Date();
-    const h = now.getHours(), mi = now.getMinutes(), s = now.getSeconds(), ms = now.getMilliseconds();
-    const t = ((h * 60 + mi) * 60 + s) * 1000 + ms;   // ms since local midnight
-
-    const b = [
-      Math.floor(t / MS.muhurta),            // 0–29
-      Math.floor(t / MS.laya) % 20,          // 0–19
-      Math.floor(t / MS.acchata) % 20,
-      Math.floor(t / MS.nimesa) % 20,
-      Math.floor(t / MS.ksana) % 20,
-    ];
-
-    render(bCells, b.map(v => pad(v)).join(''), live);
-    render(cCells, pad(h) + pad(mi) + pad(s) + pad(ms, 3), live);
-
-    // 法輪: one clockwise turn every 10 seconds, upright at :00, :10, :20 …
-    wheel.style.transform = `rotate(${(((s % 10) * 1000 + ms) / 10000) * 360}deg)`;
-
-    if (s !== lastSecond) {
-      lastSecond = s;
-      readout.textContent =
-        `Buddhist time ${b.join(':')}, conventional time ${pad(h)}:${pad(mi)}:${pad(s)}`;
+    // readouts: 須臾:羅豫:彈指 and HH:MM:SS
+    const b = `${pad(Math.floor(t / MUHURTA))}:${pad(Math.floor(t / LAYA) % 20)}:${pad(Math.floor(t / ACCHATA) % 20)}`;
+    const c = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+    if (b !== lastB) { readBText.textContent = b; lastB = b; }
+    if (c !== lastC) {
+      readCText.textContent = c; lastC = c;
+      srReadout.textContent = target === 0 ? `Buddhist time ${b}` : `Conventional time ${c}`;
     }
 
-    requestAnimationFrame(tick);
+    setSky(skyFor(now.getHours()), false);
+    requestAnimationFrame(frame);
   }
 
-  // Scale the artboard down only when the window is too small for it.
-  // Content spans y 107–556 of the 743px frame, i.e. 264.5px above its centre.
+  // ── fit the 440px clock into small windows ─────────────────────────
+  // The face is 360px wide; the label and readout arcs reach 214px from the centre.
   function fit() {
-    const sx = (innerWidth - 24) / 388;
-    const sy = (innerHeight / 2 - 20) / 264.5;
-    stage.style.setProperty('--s', Math.max(0.4, Math.min(1, sx, sy)).toFixed(4));
+    const s = Math.min(1, (innerWidth - 24) / 364, (innerHeight - 24) / 432);
+    document.documentElement.style.setProperty('--s', Math.max(0.3, s).toFixed(4));
   }
   addEventListener('resize', fit);
   fit();
 
-  tick();
+  setSky(skyFor(new Date().getHours()), true);
+  requestAnimationFrame(frame);
 
-  const fontsReady = Promise.all([
-    document.fonts.load('400 52px "Fraunces"', '0123456789:'),
-    document.fonts.load('600 15px "Fraunces"', 'the Buddhist Time'),
-    document.fonts.load('700 15px "Zen Old Mincho"', '須臾羅豫彈指瞬念'),
-    document.fonts.load('400 15px "Rozha One"', 'मुहूर्त'),
+  const fonts = Promise.all([
+    document.fonts.load('400 28px "Fraunces"', 'the Buddhist Time'),
+    document.fonts.load('600 28px "Fraunces"', '0123456789:'),
   ]).catch(() => {});
-  const timeout = new Promise(r => setTimeout(r, 3000));
-
-  Promise.race([fontsReady, timeout]).then(() => {
-    requestAnimationFrame(() => {
-      stage.classList.add('is-ready');
-      setTimeout(() => { live = true; }, 300);
-    });
-  });
+  Promise.race([fonts, new Promise(r => setTimeout(r, 3000))])
+    .then(() => requestAnimationFrame(() => clock.classList.add('is-ready')));
 })();
 </script>
 </body>
