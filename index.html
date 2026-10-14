@@ -1,3 +1,8 @@
+﻿<!--
+The Mahāsāṃghika Vinaya, an ancient Indian Buddhist monastic code, divides a single day and night into thirty muhūrtas. Each muhūrta holds twenty layas, and each laya twenty finger-snaps (acchaṭā). Beneath the finger-snap lie still finer measures: the blink (nimeṣa) and the moment (kṣaṇa), a single moment lasting a mere eighteen milliseconds. This work translates that ancient system of reckoning time into the most familiar of forms, the clock face, inviting viewers to sense the subtlety of the Buddhist conception of time as they move between its units and its counting systems.
+
+印度經典《摩訶僧祇律》中將1天分為30個須臾，1個須臾有20個羅豫，1個羅豫裡有20個彈指，彈指之下還有瞬與念。念即剎那，一念僅約十八毫秒。本作品將這套古老的計時法則，轉譯為人們再熟悉不過的鐘面形式，邀請觀眾在不同單位與進位制的轉換之中，體驗佛教微妙的時間觀。
+-->
 <!doctype html>
 <html lang="en">
 <head>
@@ -204,6 +209,51 @@
   const skies = [...document.querySelectorAll('.sky')];
   const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
 
+  // ── second hand colour ─────────────────────────────────────────────
+  // Always a fully saturated sRGB colour (one channel at 255, one at 0), i.e. the most
+  // chromatic colour the screen can show for that hue, so it never turns grey or muddy.
+  // Hue advances evenly in OKLCH (perceptual) hue: half the wheel per minute,
+  // starting from a random hue when the page loads.
+  const pureRGB = h => {                    // HSL(h, 100%, 50%) → [r, g, b] 0–1
+    const k = n => (n + h / 30) % 12;
+    const f = n => 0.5 - 0.5 * Math.max(-1, Math.min(k(n) - 3, 9 - k(n), 1));
+    return [f(0), f(8), f(4)];
+  };
+  const okHue = ([r, g, b]) => {            // sRGB → OKLab hue in degrees
+    const lin = c => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
+    const R = lin(r), G = lin(g), B = lin(b);
+    const l = Math.cbrt(0.4122214708 * R + 0.5363325363 * G + 0.0514459929 * B);
+    const m = Math.cbrt(0.2119034982 * R + 0.6806995451 * G + 0.1073969566 * B);
+    const s = Math.cbrt(0.0883024619 * R + 0.2817188376 * G + 0.6299787005 * B);
+    const A = 1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s;
+    const Bb = 0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s;
+    return Math.atan2(Bb, A) * 180 / Math.PI;
+  };
+  // table: HSL hue → OKLCH hue (unwrapped, increasing), inverted by interpolation
+  const HUE_STEPS = 1440;
+  const okTable = [];
+  for (let i = 0, prev = null; i <= HUE_STEPS; i++) {
+    let v = okHue(pureRGB(i * 360 / HUE_STEPS));
+    if (prev !== null) {
+      while (v < prev - 180) v += 360;      // unwrap the ±180° seam
+      v = Math.max(v, prev);                // flatten a hair-thin reversal near pure blue
+    }
+    okTable.push(v);
+    prev = v;
+  }
+  function pureColourAtOkHue(theta) {
+    const t = okTable[0] + ((((theta - okTable[0]) % 360) + 360) % 360);
+    let lo = 0, hi = HUE_STEPS;
+    while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (okTable[mid] <= t) lo = mid; else hi = mid; }
+    const f = (t - okTable[lo]) / ((okTable[hi] - okTable[lo]) || 1);
+    const hslHue = (lo + f) * 360 / HUE_STEPS;
+    const [r, g, b] = pureRGB(hslHue % 360);
+    return `rgb(${Math.round(r * 255)} ${Math.round(g * 255)} ${Math.round(b * 255)})`;
+  }
+  const hueStart = Math.random() * 360;
+  const hueStartTime = performance.now();
+  const HUE_PER_MS = 180 / 60_000;          // half the hue wheel per minute
+
   // ── switching state ─────────────────────────────────────────────────
   // u runs 0 (Buddhist) ↔ 1 (conventional); e = eased u drives everything.
   let u = 0, target = 0, lastTs = 0;
@@ -296,6 +346,7 @@
     handH.setAttribute('transform', `rotate(${wrap(blend('h')).toFixed(3)})`);
     handM.setAttribute('transform', `rotate(${wrap(blend('m')).toFixed(3)})`);
     handS.setAttribute('transform', `rotate(${wrap(blend('s')).toFixed(3)})`);
+    handS.setAttribute('fill', pureColourAtOkHue(hueStart + (ts - hueStartTime) * HUE_PER_MS));
 
     // ticks: k < 12 moves from 12k° to 30k°; the extra ticks close in on 360° and shrink away
     const fade = 1 - clamp01(e / 0.75);
