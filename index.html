@@ -112,7 +112,7 @@
 
     <!-- face: white 50% fill, 2px inside stroke -->
     <circle r="180" fill="#fff" fill-opacity="0.5"/>
-    <circle r="179" fill="none" stroke="#fff" stroke-width="2"/>
+    <circle r="179" fill="none" stroke="#fff" stroke-opacity="0.5" stroke-width="2"/>
 
     <g id="ticks" fill="#fff"></g>
 
@@ -124,15 +124,15 @@
 
     <!-- hands, drawn pointing to 12 and rotated about the centre -->
     <g id="hand-hour" fill="#fff" filter="url(#shadow-10)">
-      <rect x="-6" y="-86" width="12" height="114" rx="6"/>
+      <rect x="-5" y="-93" width="10" height="121" rx="5"/>
       <circle r="16"/>
     </g>
     <g id="hand-minute" fill="#fff" filter="url(#shadow-15)">
-      <rect x="-3" y="-131" width="6" height="161" rx="3"/>
+      <rect x="-5" y="-160" width="10" height="190" rx="5"/>
       <circle r="10"/>
     </g>
     <g id="hand-second" fill="#ff4e89">
-      <rect x="-1" y="-162" width="2" height="187" rx="1"/>
+      <rect x="-1" y="-150" width="2" height="175" rx="1"/>
       <circle r="6"/>
     </g>
   </svg>
@@ -150,24 +150,42 @@
   const ACCHATA = LAYA / 20;         // 彈指      7 200 ms
 
   // Hand angles in degrees, not wrapped, so in-between angles stay continuous.
-  //   Buddhist:     hour 2 turns a day (15 須臾 per turn) · minute 1 turn per 須臾 · second 1 turn per 羅豫
+  //   Buddhist:     hour 1 turn a day (30 須臾 per turn) · minute 1 turn per 須臾 · second 1 turn per 羅豫
   //   Conventional: hour 2 turns a day · minute 1 turn an hour · second 1 turn a minute
-  const anglesB = t => ({ h: t / DAY * 720, m: t / MUHURTA * 360, s: t / LAYA * 360 });
+  const anglesB = t => ({ h: t / DAY * 360, m: t / MUHURTA * 360, s: t / LAYA * 360 });
   const anglesC = t => ({ h: t / DAY * 720, m: t / 3_600_000 * 360, s: t / 60_000 * 360 });
 
-  // ── ticks: 15 for 須臾 (every 24°), 12 for hours (every 30°) ───────────
-  // Tick k sits at 24k° in Buddhist time and 30k° in conventional time,
-  // so it travels 6k° clockwise. Ticks 12–14 keep going the same way and fade out.
-  const N_B = 15, N_C = 12;
-  const R_OUT = 160, LEN = 20, W = 2;       // 20px in from the 180px rim
+  // ── ticks: 30 for 須臾 (every 12°), 12 for hours (every 30°) ───────────
+  // Tick k (0–11) moves clockwise from 12k° to 30k°. Ticks 12–29 are swept the same way
+  // into 12 o'clock and fade out, so the face folds up like a fan; switching back unfolds it.
+  const N_B = 30, N_C = 12;
+  const R_OUT = 170, LEN = 10;              // 10px in from the 180px rim
+  const THIN = 2, BOLD = 6;
+  const THIN_OPACITY = 0.5;
+  // Bold ticks (6px, full white): Buddhist 5, 10, 15, 20, 25, 30 (every 5th 須臾, 30 at the top);
+  // conventional 3, 6, 9, 12. The rest are 2px at 50%.
+  // A tick that changes role thickens/thins and brightens/dims as it travels.
+  const isBoldB = k => k % 5 === 0;
+  const isBoldC = k => k % 3 === 0;
+  const widthB = k => (isBoldB(k) ? BOLD : THIN);
+  const widthC = k => (isBoldC(k) ? BOLD : THIN);
+  const opacityB = k => (isBoldB(k) ? 1 : THIN_OPACITY);
+  const opacityC = k => (isBoldC(k) ? 1 : THIN_OPACITY);
   const tickGroup = document.getElementById('ticks');
   const ticks = [];
+  const setWidth = (r, w) => {
+    const v = w.toFixed(3);
+    if (r.dataset.w === v) return;
+    r.dataset.w = v;
+    r.setAttribute('x', (-w / 2).toFixed(3));
+    r.setAttribute('width', v);
+  };
   for (let k = 0; k < N_B; k++) {
     const r = document.createElementNS(SVGNS, 'rect');
-    r.setAttribute('x', -W / 2);
     r.setAttribute('y', -R_OUT);
-    r.setAttribute('width', W);
     r.setAttribute('height', LEN);
+    setWidth(r, widthB(k));
+    r.setAttribute('opacity', opacityB(k));
     tickGroup.appendChild(r);
     ticks.push(r);
   }
@@ -279,18 +297,22 @@
     handM.setAttribute('transform', `rotate(${wrap(blend('m')).toFixed(3)})`);
     handS.setAttribute('transform', `rotate(${wrap(blend('s')).toFixed(3)})`);
 
-    // ticks: k moves from 24k° to 30k°; the three extra ticks shrink and fade as they go
+    // ticks: k < 12 moves from 12k° to 30k°; the extra ticks close in on 360° and shrink away
     const fade = 1 - clamp01(e / 0.75);
     for (let k = 0; k < N_B; k++) {
-      const a = 24 * k + 6 * k * e;
+      const from = 12 * k;
+      const to = k < N_C ? 30 * k : 360;
+      const a = from + (to - from) * e;
       if (k < N_C) {
         ticks[k].setAttribute('transform', `rotate(${a.toFixed(3)})`);
+        setWidth(ticks[k], widthB(k) + (widthC(k) - widthB(k)) * e);
+        ticks[k].setAttribute('opacity', (opacityB(k) + (opacityC(k) - opacityB(k)) * e).toFixed(3));
       } else {
         const g = Math.max(0.0001, fade);
         // scale the tick's length about its outer end
         ticks[k].setAttribute('transform',
           `rotate(${a.toFixed(3)}) translate(0 ${-R_OUT}) scale(1 ${g.toFixed(4)}) translate(0 ${R_OUT})`);
-        ticks[k].setAttribute('opacity', fade.toFixed(3));
+        ticks[k].setAttribute('opacity', (opacityB(k) * fade).toFixed(3));
       }
     }
 
